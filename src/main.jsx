@@ -1,104 +1,91 @@
+// let userRef = firebase.database().ref("users");
 import React from 'react';
 import ReactDOM from 'react-dom';
-let userRef = firebase.database().ref("users");
-
-class NavigationBar extends React.Component {
-    render() {
-        return <nav className="navbar navbar-default">
-            <div className="container-fluid">
-                <div className="navbar-header">
-                    <a className="navbar-brand" href="#">
-                        <img alt="Brand" src="assets/goku.jpg"/>
-                    </a>
-                </div>
-            </div>
-        </nav>
-      }
-}
-
-class SearchInput extends React.Component {
-    constructor(props) {
-        super(props);
-    }
-    onSearch(e) {
-        e.preventDefault();
-        let searchValue = this.refs.searchInput.value.trim().toLowerCase().replace(/\s/g, "-");
-        let filterdList = this.filterSearchValue(searchValue);
-        filterdList.sort((a, b)=> b.h - a.h) // sort by hits
-        this.props.searchHandler(filterdList);
-    }
-    filterSearchValue(searchValue) {
-        let mangaList = this.props.mangaList.manga;
-        let filteredList = []
-        let find = array => {
-            for (let i = 0; i < array.length; i ++) {
-                let current = array[i];
-                if (current.a && current.a.includes(searchValue)) {
-                    filteredList.push(current);
-                } else if (current.length){
-                    find(current);
-                }
-            }
-        }
-        find(mangaList);
-        return filteredList
-    }
-    render() {
-        return <div>
-            <form className="navbar-form navbar-left" role="search" onSubmit={this.onSearch.bind(this)}>
-                <div className="form-group">
-                    <input type="text" id="searchBox" className="form-control" ref="searchInput" placeholder="Search"/>
-                </div>
-                <button type="submit" className="btn btn-default">Submit</button>
-            </form>
-        </div>
-    }
-}
-
-class ContentList extends React.Component {
-    render() {
-        return <div>Hellow
-        </div>
-
-    }
-}
+import {NavigationBar} from "./navigationBar.jsx";
+import {SearchInput} from "./searchInput.jsx";
+import {ChapterView} from "./chapterView.jsx";
+import {MangaView} from "./mangaView.jsx";
 
 class Main extends React.Component {
     constructor(props) {
         super(props)
         this.state = {
             mangaList: [],
-            searchList: []
+            searchList: [],
+            mangaData: null,
+            chapterData: null,
+            currentChapter: null
         }
     }
     componentWillMount() {
+        this.fetchMangaList();
+    }
+    searchHandler(data) {
+        this.setState({ mangaData: null});
+        this.setState({ chapterData: null});
+        this.setState({ searchList: data});
+        this.setState({ currentChapter: null})
+    }
+    fetchMangaList() {
         fetch("http://www.mangaeden.com/api/list/0/", {
             method: "get"
-        }).then((response) =>{
-            response.json().then((data) => {
-                console.log(data);
-                this.setState({mangaList: data});
+        }).then((response) => {
+            response.json().then((responseData) => {
+                this.setState({ mangaList: responseData});
             });
         }).catch((error) => {
             debugger
         });
     }
-    searchHandler(data) {
-        this.setState({ searchList: data});
+    selectMangaHandler(manga) {
+        let url = `http://www.mangaeden.com/api/manga/${manga.i}/`
+        fetch(url, {
+            method: "get"
+        }).then((response) => {
+            response.json().then((responseData) => {
+                this.setState({ mangaData: responseData});
+            });
+        }).catch((error) => {
+            debugger
+        });
+    }
+    selectChapter(chapter) {
+        let url = `http://www.mangaeden.com/api/chapter/${this.state.mangaData.chapters[chapter][3]}/`;
+        this.setState({ currentChapter: chapter})
+        this.fetchChapterData(url);
+    }
+    nextChapter() {
+        let url = `http://www.mangaeden.com/api/chapter/${this.state.mangaData.chapters[this.state.currentChapter - 1][3]}/`;
+        this.setState({ currentChapter: this.state.currentChapter - 1});
+        this.fetchChapterData(url);
+    }
+    previousChapter() {
+        let url = `http://www.mangaeden.com/api/chapter/${this.state.mangaData.chapters[this.state.currentChapter + 1][3]}/`;
+        this.setState({ currentChapter: this.state.currentChapter + 1});
+        console.log(":DFFDFD")
+        this.fetchChapterData(url);
+    }
+    fetchChapterData(url) {
+        fetch(url, {
+            method: "get"
+        }).then((response)=> {
+            response.json().then((responseData) => {
+                console.log(responseData)
+                this.setState({ chapterData: responseData});
+            });
+        }).catch((err) => {
+            debugger
+        });
     }
     render() {
-        if (this.state.searchList.length) {
-            return <div>
-                <NavigationBar/>
-                <SearchInput mangaList={this.state.mangaList} searchHandler={this.searchHandler.bind(this)}/>
-                <ContentList dataList={this.state.searchList}/>
-            </div>
-        } else {
-            return <div>
-                <NavigationBar/>
-                <SearchInput mangaList={this.state.mangaList} searchHandler={this.searchHandler.bind(this)}/>
-            </div>
-        }
+        return <div>
+            <NavigationBar/>
+
+            <SearchInput  mangaList={this.state.mangaList} searchHandler={this.searchHandler.bind(this)}/>
+            {(this.state.searchList.length && !this.state.mangaData) ? <SearchList dataList={this.state.searchList} selectMangaHandler={this.selectMangaHandler.bind(this)}/> : null}
+            {(this.state.mangaData && !this.state.chapterData) ? <MangaView mangaData={this.state.mangaData} selectChapter={this.selectChapter.bind(this)}/> : null}
+            {(this.state.chapterData) ? <ChapterView previousChapter={this.previousChapter.bind(this)} nextChapter={this.nextChapter.bind(this)} chapterData={this.state.chapterData} showPrev={this.state.mangaData.chapters.length - 1 === this.state.currentChapter ? false : true} showNext={(this.state.currentChapter < 0) ? false: true} /> : null }
+        </div>;
     }
 }
 
